@@ -11,7 +11,7 @@ from sys import argv
 
 # Settings
 CLIP_LIMIT = 50             # number of clipboard history
-HISTORY_FILE = os.environ['HOME'] + '/.clipboard-history.bin'
+HISTORY_FILE = os.environ['HOME'] + '/.clipboard-history'
 CLIP_FILE = os.environ['HOME'] + '/.clipboard'
 STRING_LIMIT = 100
 HELP = '''./mclip.py menu|daemon'''
@@ -47,8 +47,8 @@ class ClipboardManager():
             print '{}: {}'.format(index, clip[0:STRING_LIMIT])
 
     def copy(self, select):
-        clips = self.read()
         if select:
+            clips = self.read()
             index = int(select[0:select.index(':')])
             with open(CLIP_FILE, "w+") as file:
                 file.write(clips[index])
@@ -56,11 +56,10 @@ class ClipboardManager():
     def paste(self):
         with open(CLIP_FILE, "r") as file:
             copy = file.read()
-
-        if copy:
-            pyperclip.copy(copy)
-            p = subprocess.Popen(['xte'], stdin=subprocess.PIPE)
-            p.communicate(input=PASTE)
+            if copy:
+                pyperclip.copy(copy)
+                p = subprocess.Popen(['xte'], stdin=subprocess.PIPE)
+                p.communicate(input=PASTE)
 
     def read(self):
         result = []
@@ -69,7 +68,7 @@ class ClipboardManager():
             while bytes_read:
                 chunksize = struct.unpack('>i', bytes_read)[0]
                 bytes_read = file.read(chunksize)
-                result.append(str(bytes_read))
+                result.append(bytes_read)
                 bytes_read = file.read(4)
         return result
 
@@ -84,13 +83,12 @@ if __name__ == "__main__":
 
     if len(argv) <= 1:
         print(HELP)
-    elif argv[1] == 'menu':
-        if len(argv) > 2:
-            cm.copy(argv[2])
-        else:
-            cm.menu()
     elif argv[1] == 'daemon':
         cm.daemon()
+    elif argv[1] == 'menu' and len(argv) == 2:
+        cm.menu()
+    elif argv[1] == 'menu' and len(argv) > 2:
+        cm.copy(argv[2])
     elif argv[1] == 'paste':
         cm.paste()
     else:
