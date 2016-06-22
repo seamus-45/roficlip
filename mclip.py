@@ -44,7 +44,7 @@ class ClipboardManager():
         clips = self.read()
         for index, clip in enumerate(clips):
             clip = clip.replace('\n', ' ')
-            print '{}: {}'.format(index, clip[0:STRING_LIMIT])
+            print('{}: {}'.format(index, clip[0:STRING_LIMIT]))
 
     def copy(self, select):
         if select:
@@ -68,7 +68,7 @@ class ClipboardManager():
             while bytes_read:
                 chunksize = struct.unpack('>i', bytes_read)[0]
                 bytes_read = file.read(chunksize)
-                result.append(bytes_read)
+                result.append(bytes_read.decode('utf-8'))
                 bytes_read = file.read(4)
         return result
 

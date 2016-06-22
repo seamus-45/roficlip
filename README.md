@@ -16,7 +16,11 @@ Run daemon:
 /path/to/mclip/mclip.py daemon &
 ```
 
-and bind hotkey: "rofi -modi "clipboard:/path/to/mclip/mclip.py menu" -show clipboard && $mclip paste"
+and bind hotkey: 
+```
+#!bash
+"rofi -modi "clipboard:/path/to/mclip/mclip.py menu" -show clipboard && /path/to/mclip/mclip.py paste"
+```
 
 # i3wm EXAMPLE CONFIG
 
