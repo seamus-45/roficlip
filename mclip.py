@@ -43,7 +43,7 @@ class ClipboardManager():
 
         clips = self.read()
         for index, clip in enumerate(clips):
-            clip = clip.replace('\n', ' ')
+            clip = clip.replace('\n', ' ').encode('utf-8')
             print('{}: {}'.format(index, clip[0:STRING_LIMIT]))
 
     def copy(self, select):
@@ -51,13 +51,13 @@ class ClipboardManager():
             clips = self.read()
             index = int(select[0:select.index(':')])
             with open(CLIP_FILE, "w+") as file:
-                file.write(clips[index])
+                file.write(clips[index].encode('utf-8'))
 
     def paste(self):
         with open(CLIP_FILE, "r") as file:
             copy = file.read()
             if copy:
-                pyperclip.copy(copy)
+                pyperclip.copy(copy.decode('utf-8'))
                 p = subprocess.Popen(['xte'], stdin=subprocess.PIPE)
                 p.communicate(input=PASTE)
 
@@ -75,6 +75,7 @@ class ClipboardManager():
     def write(self, items):
         with open(HISTORY_FILE, 'wb') as file:
             for item in items:
+                item = item.encode('utf-8')
                 file.write("{0}{1}".format(struct.pack('>i', len(item)), item))
 
 
