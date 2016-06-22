@@ -5,7 +5,7 @@ It's simple clipboard history manager for using with rofi.
 ```
 #!bash
 apt-get install python-pyperclip xautomation
-git clone git@bitbucket.org:pandozer/rofi-clipboard-manager.git
+git clone https://bitbucket.org/pandozer/rofi-clipboard-manager.git
 cd rofi-clipboard-manager
 ```
 
