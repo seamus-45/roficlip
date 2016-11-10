@@ -10,10 +10,10 @@ from sys import argv
 
 
 # Settings
-CLIP_LIMIT = 50             # number of clipboard history
+CLIP_LIMIT = 200             # number of clipboard history
 HISTORY_FILE = os.environ['HOME'] + '/.clipboard-history'
 CLIP_FILE = os.environ['HOME'] + '/.clipboard'
-STRING_LIMIT = 100
+STRING_LIMIT = 200
 HELP = '''./mclip.py menu|daemon'''
 PASTE = '''keydown Control_L
 key v
@@ -57,7 +57,8 @@ class ClipboardManager():
         with open(CLIP_FILE, "r") as file:
             copy = file.read()
             if copy:
-                pyperclip.copy(copy.decode('utf-8'))
+                # pyperclip.copy(copy.decode('utf-8'))
+                os.system('xsel --clipboard < ' + CLIP_FILE)
                 p = subprocess.Popen(['xte'], stdin=subprocess.PIPE)
                 p.communicate(input=PASTE)
 
