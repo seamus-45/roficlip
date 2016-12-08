@@ -4,7 +4,6 @@
 import os
 import time
 import struct
-import subprocess
 import pyperclip
 from sys import argv
 
@@ -15,10 +14,6 @@ HISTORY_FILE = os.environ['HOME'] + '/.clipboard-history'
 CLIP_FILE = os.environ['HOME'] + '/.clipboard'
 STRING_LIMIT = 200
 HELP = '''./mclip.py menu|daemon'''
-PASTE = '''keydown Control_L
-key v
-keyup Control_L
-'''                         # your paste key
 DAEMON_DELAY = 1
 
 
@@ -57,10 +52,7 @@ class ClipboardManager():
         with open(CLIP_FILE, "r") as file:
             copy = file.read()
             if copy:
-                # pyperclip.copy(copy.decode('utf-8'))
-                os.system('xsel --clipboard < ' + CLIP_FILE)
-                p = subprocess.Popen(['xte'], stdin=subprocess.PIPE)
-                p.communicate(input=PASTE)
+                pyperclip.copy()
 
     def read(self):
         result = []
