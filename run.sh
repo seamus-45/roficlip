@@ -1,1 +1,0 @@
-rofi -modi "clipboard:/home/sayplz/dev/mclip/mclip.py menu" -show clipboard && /home/sayplz/dev/mclip/mclip.py paste
