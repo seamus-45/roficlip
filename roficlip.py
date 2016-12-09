@@ -1,5 +1,22 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
+"""Rofi clipboard manager
+Usage:
+    roficlip.py --daemon
+    roficlip.py --show [<index>]
+    roficlip.py (-h | --help)
+    roficlip.py (-v | --version)
+
+Arguments:
+    <index>     Index of item. Used by Rofi.
+
+Commands:
+    --daemon        Run clipboard manager daemon.
+    --show          Show clipboard history.
+    -h, --help      Show this screen.
+    -v, --version   Show version.
+
+"""
 
 import os
 import stat
@@ -7,15 +24,14 @@ import errno
 import struct
 import gobject
 import gtk
-from sys import argv
 from xdg import BaseDirectory
+from docopt import docopt
 
 
 # Settings
 RING_LIMIT = 20
 STRING_LIMIT = 200
 DAEMON_DELAY = 500
-HELP = '''./mclip.py show|daemon'''
 
 
 class ClipboardManager():
@@ -118,15 +134,12 @@ class ClipboardManager():
 
 if __name__ == "__main__":
     cm = ClipboardManager()
-
-    if len(argv) <= 1:
-        print(HELP)
-    elif argv[1] == 'daemon':
+    args = docopt(__doc__, version='0.2')
+    if args['--daemon']:
         cm.daemon()
-    elif argv[1] == 'show' and len(argv) == 2:
-        cm.ring_show()
-    elif argv[1] == 'show' and len(argv) > 2:
-        cm.clip_copy(argv[2])
-    else:
-        print(HELP)
+    elif args['--show']:
+        if args['<index>']:
+            cm.clip_copy(args['<index>'])
+        else:
+            cm.ring_show()
     exit(0)
