@@ -63,24 +63,11 @@ class ClipboardManager():
         """
         Clipboard Manager daemon.
         """
-        gobject.timeout_add(300, self.ring_input)
-        gobject.timeout_add(300, self.ring_output)
+        gobject.timeout_add(300, self.cb_watcher)
+        gobject.timeout_add(300, self.fifo_watcher)
         gtk.main()
 
-    def sync_items(self, clip, items):
-        """
-        Helper function.
-        Sync clipboard contents with specified dict when needed.
-        Return "True" if dict modified, otherwise "False".
-        """
-        if clip and (not items or clip != items[0]):
-            if clip in items:
-                items.remove(clip)
-            items.insert(0, clip)
-            return True
-        return False
-
-    def ring_input(self):
+    def cb_watcher(self):
         """
         Callback function.
         Watch clipboard and write changes to ring database.
@@ -92,7 +79,7 @@ class ClipboardManager():
             self.write(self.ring_db, self.ring)
         return True
 
-    def ring_output(self):
+    def fifo_watcher(self):
         """
         Callback function.
         Copy contents from fifo to clipboard.
@@ -108,6 +95,28 @@ class ClipboardManager():
         if fifo_in:
             self.cb.set_text(fifo_in)
         return True
+
+    def sync_items(self, clip, items):
+        """
+        Helper function.
+        Sync clipboard contents with specified dict when needed.
+        Return "True" if dict modified, otherwise "False".
+        """
+        if clip and (not items or clip != items[0]):
+            if clip in items:
+                items.remove(clip)
+            items.insert(0, clip)
+            return True
+        return False
+
+    def copy_item(self, clip, items):
+        """
+        Writes to fifo item that should be copied to clipboard.
+        """
+        if clip:
+            index = int(clip[0:clip.index(':')])
+            with open(self.fifo_path, "w+") as file:
+                file.write(items[index].encode('utf-8'))
 
     def show_items(self, items):
         """
@@ -125,15 +134,6 @@ class ClipboardManager():
         clip = self.cb.wait_for_text()
         if self.sync_items(clip, self.persist):
             self.write(self.persist_db, self.persist)
-
-    def clip_copy(self, clip, items):
-        """
-        Writes to fifo clip that should be copied to clipboard.
-        """
-        if clip:
-            index = int(clip[0:clip.index(':')])
-            with open(self.fifo_path, "w+") as file:
-                file.write(items[index].encode('utf-8'))
 
     def read(self, fd):
         """
@@ -188,7 +188,7 @@ if __name__ == "__main__":
         cm.daemon()
     elif args['--show']:
         if args['<index>']:
-            cm.clip_copy(args['<index>'],
+            cm.copy_item(args['<index>'],
                          cm.persist if args['--persistent'] else cm.ring)
         else:
             cm.show_items(cm.persist if args['--persistent'] else cm.ring)
