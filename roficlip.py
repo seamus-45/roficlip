@@ -89,7 +89,7 @@ class ClipboardManager():
         """
         if clip:
             index = int(clip[0:clip.index(':')])
-            with open(self.ring_fifo, "w+") as file:
+            with open(self.fifo_path, "w+") as file:
                 file.write(self.ring[index].encode('utf-8'))
 
     def read(self, fd):
