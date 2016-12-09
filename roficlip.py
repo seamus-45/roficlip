@@ -24,22 +24,18 @@ import errno
 import struct
 import gobject
 import gtk
+import yaml
 from xdg import BaseDirectory
 from docopt import docopt
-
-
-# Settings
-RING_LIMIT = 20
-STRING_LIMIT = 200
-DAEMON_DELAY = 500
 
 
 class ClipboardManager():
     def __init__(self):
         # Init databases and fifo
-        name = 'mclip'
+        name = 'roficlip'
         self.ring_db = '{0}/{1}'.format(BaseDirectory.save_data_path(name), 'ring.db')
         self.fifo_path = '{0}/{1}.fifo'.format(BaseDirectory.get_runtime_dir(strict=False), name)
+        self.config_path = '{0}/settings'.format(BaseDirectory.save_config_path(name))
         if not os.path.isfile(self.ring_db):
             open(self.ring_db, "a+").close()
         if (
@@ -51,13 +47,15 @@ class ClipboardManager():
         # Init clipboard
         self.cb = gtk.Clipboard()
         self.ring = self.read(self.ring_db)
+        # Load settings
+        self.load_config()
 
     def daemon(self):
         """
         Clipboard Manager daemon.
         """
-        gobject.timeout_add(DAEMON_DELAY, self.ring_input)
-        gobject.timeout_add(DAEMON_DELAY, self.ring_output)
+        gobject.timeout_add(300, self.ring_input)
+        gobject.timeout_add(300, self.ring_output)
         gtk.main()
 
     def ring_input(self):
@@ -71,7 +69,7 @@ class ClipboardManager():
             if clip in self.ring:
                 self.ring.remove(clip)
             self.ring.insert(0, clip)
-            self.write(self.ring_db, self.ring[0:RING_LIMIT])
+            self.write(self.ring_db, self.ring[0:self.cfg['ring_size']])
         return True
 
     def ring_output(self):
@@ -96,8 +94,9 @@ class ClipboardManager():
         Format and show ring contents (for rofi).
         """
         for index, clip in enumerate(self.ring):
-            clip = clip.replace('\n', '¬').encode('utf-8')
-            print('{}: {}'.format(index, clip[0:STRING_LIMIT]))
+            clip = clip.replace('\n', self.cfg['newline_char']).encode('utf-8')
+            preview = clip[0:self.cfg['preview_width']]
+            print('{}: {}'.format(index, preview))
 
     def clip_copy(self, clip):
         """
@@ -130,6 +129,26 @@ class ClipboardManager():
             for item in items:
                 item = item.encode('utf-8')
                 file.write("{0}{1}".format(struct.pack('>i', len(item)), item))
+
+    def load_config(self):
+        """
+        Read config if exists, and/or provide defaults.
+        """
+        # default settings
+        settings = {
+            'settings': {
+                'ring_size': 20,
+                'preview_width': 200,
+                'newline_char': '¬',
+            }
+        }
+        if os.path.isfile(self.config_path):
+            with open(self.config_path, "r") as file:
+                config = yaml.load(file)
+                for key in {'settings'}:
+                    if key in config:
+                        settings[key].update(config[key])
+        self.cfg = settings['settings']
 
 
 if __name__ == "__main__":
