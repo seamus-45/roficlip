@@ -3,7 +3,8 @@
 """Rofi clipboard manager
 Usage:
     roficlip.py --daemon
-    roficlip.py --show [<index>]
+    roficlip.py --show [--persistent] [<index>]
+    roficlip.py --save
     roficlip.py (-h | --help)
     roficlip.py (-v | --version)
 
@@ -13,6 +14,8 @@ Arguments:
 Commands:
     --daemon        Run clipboard manager daemon.
     --show          Show clipboard history.
+    --persistent    Select persistent history to be shown.
+    --save          Save current clipboard as persistent.
     -h, --help      Show this screen.
     -v, --version   Show version.
 
@@ -34,19 +37,25 @@ class ClipboardManager():
         # Init databases and fifo
         name = 'roficlip'
         self.ring_db = '{0}/{1}'.format(BaseDirectory.save_data_path(name), 'ring.db')
+        self.persist_db = '{0}/{1}'.format(BaseDirectory.save_data_path(name), 'persistent.db')
         self.fifo_path = '{0}/{1}.fifo'.format(BaseDirectory.get_runtime_dir(strict=False), name)
         self.config_path = '{0}/settings'.format(BaseDirectory.save_config_path(name))
         if not os.path.isfile(self.ring_db):
             open(self.ring_db, "a+").close()
+        if not os.path.isfile(self.persist_db):
+            open(self.persist_db, "a+").close()
         if (
             not os.path.exists(self.fifo_path) or
             not stat.S_ISFIFO(os.stat(self.fifo_path).st_mode)
         ):
             os.mkfifo(self.fifo_path)
         self.fifo = os.open(self.fifo_path, os.O_RDONLY | os.O_NONBLOCK)
-        # Init clipboard
+
+        # Init clipboard and read databases
         self.cb = gtk.Clipboard()
         self.ring = self.read(self.ring_db)
+        self.persist = self.read(self.persist_db)
+
         # Load settings
         self.load_config()
 
@@ -58,6 +67,19 @@ class ClipboardManager():
         gobject.timeout_add(300, self.ring_output)
         gtk.main()
 
+    def sync_items(self, clip, items):
+        """
+        Helper function.
+        Sync clipboard contents with specified dict when needed.
+        Return "True" if dict modified, otherwise "False".
+        """
+        if clip and (not items or clip != items[0]):
+            if clip in items:
+                items.remove(clip)
+            items.insert(0, clip)
+            return True
+        return False
+
     def ring_input(self):
         """
         Callback function.
@@ -65,11 +87,9 @@ class ClipboardManager():
         Must return "True" for continuous operation.
         """
         clip = self.cb.wait_for_text()
-        if clip and (not self.ring or clip != self.ring[0]):
-            if clip in self.ring:
-                self.ring.remove(clip)
-            self.ring.insert(0, clip)
-            self.write(self.ring_db, self.ring[0:self.cfg['ring_size']])
+        if self.sync_items(clip, self.ring):
+            self.ring = self.ring[0:self.cfg['ring_size']]
+            self.write(self.ring_db, self.ring)
         return True
 
     def ring_output(self):
@@ -89,27 +109,35 @@ class ClipboardManager():
             self.cb.set_text(fifo_in)
         return True
 
-    def ring_show(self):
+    def show_items(self, items):
         """
-        Format and show ring contents (for rofi).
+        Format and show contents of specified dict (for rofi).
         """
-        for index, clip in enumerate(self.ring):
+        for index, clip in enumerate(items):
             clip = clip.replace('\n', self.cfg['newline_char']).encode('utf-8')
             preview = clip[0:self.cfg['preview_width']]
             print('{}: {}'.format(index, preview))
 
-    def clip_copy(self, clip):
+    def persistent_save(self):
+        """
+        Save current clipboard contents as persistent.
+        """
+        clip = self.cb.wait_for_text()
+        if self.sync_items(clip, self.persist):
+            self.write(self.persist_db, self.persist)
+
+    def clip_copy(self, clip, items):
         """
         Writes to fifo clip that should be copied to clipboard.
         """
         if clip:
             index = int(clip[0:clip.index(':')])
             with open(self.fifo_path, "w+") as file:
-                file.write(self.ring[index].encode('utf-8'))
+                file.write(items[index].encode('utf-8'))
 
     def read(self, fd):
         """
-        Helper function. Data reader.
+        Helper function. Binary reader.
         """
         result = []
         with open(fd, "rb") as file:
@@ -123,7 +151,7 @@ class ClipboardManager():
 
     def write(self, fd, items):
         """
-        Helper function. Data writer.
+        Helper function. Binary writer.
         """
         with open(fd, 'wb') as file:
             for item in items:
@@ -138,17 +166,19 @@ class ClipboardManager():
         settings = {
             'settings': {
                 'ring_size': 20,
-                'preview_width': 200,
+                'preview_width': 100,
                 'newline_char': '¬',
-            }
+            },
+            'actions': {}
         }
         if os.path.isfile(self.config_path):
             with open(self.config_path, "r") as file:
                 config = yaml.load(file)
-                for key in {'settings'}:
+                for key in {'settings', 'actions'}:
                     if key in config:
                         settings[key].update(config[key])
         self.cfg = settings['settings']
+        self.actions = settings['actions']
 
 
 if __name__ == "__main__":
@@ -158,7 +188,10 @@ if __name__ == "__main__":
         cm.daemon()
     elif args['--show']:
         if args['<index>']:
-            cm.clip_copy(args['<index>'])
+            cm.clip_copy(args['<index>'],
+                         cm.persist if args['--persistent'] else cm.ring)
         else:
-            cm.ring_show()
+            cm.show_items(cm.persist if args['--persistent'] else cm.ring)
+    elif args['--save']:
+        cm.persistent_save()
     exit(0)
