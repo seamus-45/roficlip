@@ -3,7 +3,7 @@
 """Rofi clipboard manager
 Usage:
     roficlip.py --daemon
-    roficlip.py --show [--persistent] [<index>]
+    roficlip.py --show [--persistent|--actions] [<index>]
     roficlip.py --add
     roficlip.py --remove
     roficlip.py (-h | --help)
@@ -15,7 +15,8 @@ Arguments:
 Commands:
     --daemon        Run clipboard manager daemon.
     --show          Show clipboard history.
-    --persistent    Select persistent history to be shown.
+    --persistent    Select to show persistent history.
+    --actions       Select to show actions defined in config.
     --add           Add current clipboard to persistent storage.
     --remove        Remove current clipboard from persistent storage.
     -h, --help      Show this screen.
@@ -31,6 +32,7 @@ import gobject
 import gtk
 import yaml
 import pynotify
+from subprocess import PIPE, Popen
 from xdg import BaseDirectory
 from docopt import docopt
 
@@ -156,6 +158,23 @@ class ClipboardManager():
             if self.cfg['notify']:
                 self.notify_send('Removed from persistent.')
 
+    def do_action(self, action):
+        """
+        Run selected action on clipboard contents.
+        """
+        if action:
+            clip = self.cb.wait_for_text()
+            key = action[action.index(':')+2:]
+            params = []
+            params.append(self.actions[key]['cmd'])
+            args = self.actions[key]['args'].split(' ')
+            while '%s' in args:
+                args[args.index('%s')] = clip
+            params.extend(args)
+            Popen(params, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            if self.cfg['notify']:
+                self.notify_send(key)
+
     def notify_send(self, text):
         """
         Show desktop notification.
@@ -217,12 +236,17 @@ if __name__ == "__main__":
     args = docopt(__doc__, version='0.3')
     if args['--daemon']:
         cm.daemon()
-    elif args['--show']:
+    elif (args['--show'] and not args['--actions']):
         if args['<index>']:
             cm.copy_item(args['<index>'],
                          cm.persist if args['--persistent'] else cm.ring)
         else:
             cm.show_items(cm.persist if args['--persistent'] else cm.ring)
+    elif (args['--show'] and args['--actions']):
+        if args['<index>']:
+            cm.do_action(args['<index>'])
+        else:
+            cm.show_items(cm.actions)
     elif args['--add']:
         cm.persistent_add()
     elif args['--remove']:
