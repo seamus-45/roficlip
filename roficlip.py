@@ -4,7 +4,8 @@
 Usage:
     roficlip.py --daemon
     roficlip.py --show [--persistent] [<index>]
-    roficlip.py --save
+    roficlip.py --add
+    roficlip.py --remove
     roficlip.py (-h | --help)
     roficlip.py (-v | --version)
 
@@ -15,7 +16,8 @@ Commands:
     --daemon        Run clipboard manager daemon.
     --show          Show clipboard history.
     --persistent    Select persistent history to be shown.
-    --save          Save current clipboard as persistent.
+    --add           Add current clipboard to persistent storage.
+    --remove        Remove current clipboard from persistent storage.
     -h, --help      Show this screen.
     -v, --version   Show version.
 
@@ -127,12 +129,21 @@ class ClipboardManager():
             preview = clip[0:self.cfg['preview_width']]
             print('{}: {}'.format(index, preview))
 
-    def persistent_save(self):
+    def persistent_add(self):
         """
-        Save current clipboard contents as persistent.
+        Add current clipboard to persistent storage.
         """
         clip = self.cb.wait_for_text()
         if self.sync_items(clip, self.persist):
+            self.write(self.persist_db, self.persist)
+
+    def persistent_remove(self):
+        """
+        Remove current clipboard from persistent storage.
+        """
+        clip = self.cb.wait_for_text()
+        if clip and clip in self.persist:
+            self.persist.remove(clip)
             self.write(self.persist_db, self.persist)
 
     def read(self, fd):
@@ -183,7 +194,7 @@ class ClipboardManager():
 
 if __name__ == "__main__":
     cm = ClipboardManager()
-    args = docopt(__doc__, version='0.2')
+    args = docopt(__doc__, version='0.3')
     if args['--daemon']:
         cm.daemon()
     elif args['--show']:
@@ -192,6 +203,8 @@ if __name__ == "__main__":
                          cm.persist if args['--persistent'] else cm.ring)
         else:
             cm.show_items(cm.persist if args['--persistent'] else cm.ring)
-    elif args['--save']:
-        cm.persistent_save()
+    elif args['--add']:
+        cm.persistent_add()
+    elif args['--remove']:
+        cm.persistent_remove()
     exit(0)
