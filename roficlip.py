@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """Rofi clipboard manager
 Usage:
-    roficlip.py --daemon
-    roficlip.py --show [--persistent|--actions] [<index>]
-    roficlip.py --add
-    roficlip.py --remove
+    roficlip.py --daemon [-q | --quiet]
+    roficlip.py --show [--persistent | --actions] [-q | --quiet] [<index>]
+    roficlip.py --add [-q | --quiet ]
+    roficlip.py --remove [-q | --quiet]
     roficlip.py (-h | --help)
     roficlip.py (-v | --version)
 
@@ -19,6 +19,7 @@ Commands:
     --actions       Select to show actions defined in config.
     --add           Add current clipboard to persistent storage.
     --remove        Remove current clipboard from persistent storage.
+    -q, --quiet     Do not notify, even if notification enabled in config.
     -h, --help      Show this screen.
     -v, --version   Show version.
 
@@ -165,12 +166,9 @@ class ClipboardManager():
         if action:
             clip = self.cb.wait_for_text()
             key = action[action.index(':')+2:]
-            params = []
-            params.append(self.actions[key]['cmd'])
-            args = self.actions[key]['args'].split(' ')
-            while '%s' in args:
-                args[args.index('%s')] = clip
-            params.extend(args)
+            params = self.actions[key].split(' ')
+            while '%s' in params:
+                params[params.index('%s')] = clip
             Popen(params, stdin=PIPE, stdout=PIPE, stderr=PIPE)
             if self.cfg['notify']:
                 self.notify_send(key)
@@ -223,7 +221,7 @@ class ClipboardManager():
         }
         if os.path.isfile(self.config_path):
             with open(self.config_path, "r") as file:
-                config = yaml.load(file)
+                config = yaml.safe_load(file)
                 for key in {'settings', 'actions'}:
                     if key in config:
                         settings[key].update(config[key])
@@ -234,6 +232,8 @@ class ClipboardManager():
 if __name__ == "__main__":
     cm = ClipboardManager()
     args = docopt(__doc__, version='0.3')
+    if args['--quiet']:
+        cm.cfg['notify'] = False
     if args['--daemon']:
         cm.daemon()
     elif (args['--show'] and not args['--actions']):
