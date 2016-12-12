@@ -30,6 +30,7 @@ import struct
 import gobject
 import gtk
 import yaml
+import pynotify
 from xdg import BaseDirectory
 from docopt import docopt
 
@@ -60,6 +61,10 @@ class ClipboardManager():
 
         # Load settings
         self.load_config()
+
+        # Init notifications
+        if self.cfg['notify']:
+            pynotify.init(name)
 
     def daemon(self):
         """
@@ -96,11 +101,12 @@ class ClipboardManager():
                 raise
         if fifo_in:
             self.cb.set_text(fifo_in)
+            if self.cfg['notify']:
+                self.notify_send('Copied to the clipboard.')
         return True
 
     def sync_items(self, clip, items):
         """
-        Helper function.
         Sync clipboard contents with specified dict when needed.
         Return "True" if dict modified, otherwise "False".
         """
@@ -136,6 +142,8 @@ class ClipboardManager():
         clip = self.cb.wait_for_text()
         if self.sync_items(clip, self.persist):
             self.write(self.persist_db, self.persist)
+            if self.cfg['notify']:
+                self.notify_send('Added to persistent.')
 
     def persistent_remove(self):
         """
@@ -145,6 +153,16 @@ class ClipboardManager():
         if clip and clip in self.persist:
             self.persist.remove(clip)
             self.write(self.persist_db, self.persist)
+            if self.cfg['notify']:
+                self.notify_send('Removed from persistent.')
+
+    def notify_send(self, text):
+        """
+        Show desktop notification.
+        """
+        n = pynotify.Notification("Roficlip", text)
+        n.set_timeout(self.cfg['notify_timeout'] * 1000)
+        n.show()
 
     def read(self, fd):
         """
@@ -179,6 +197,8 @@ class ClipboardManager():
                 'ring_size': 20,
                 'preview_width': 100,
                 'newline_char': '¬',
+                'notify': True,
+                'notify_timeout': 1,
             },
             'actions': {}
         }
