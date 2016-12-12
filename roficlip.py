@@ -231,7 +231,7 @@ class ClipboardManager():
 
 if __name__ == "__main__":
     cm = ClipboardManager()
-    args = docopt(__doc__, version='0.3')
+    args = docopt(__doc__, version='0.4')
     if args['--quiet']:
         cm.cfg['notify'] = False
     if args['--daemon']:
