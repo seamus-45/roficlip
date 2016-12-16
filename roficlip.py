@@ -10,7 +10,7 @@ Usage:
     roficlip.py (-v | --version)
 
 Arguments:
-    <index>     Index of item. Used by Rofi.
+    <index>         Index of item. Used by Rofi.
 
 Commands:
     --daemon        Run clipboard manager daemon.
