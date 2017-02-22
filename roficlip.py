@@ -32,7 +32,6 @@ import struct
 import gobject
 import gtk
 import yaml
-import pynotify
 from subprocess import PIPE, Popen
 from xdg import BaseDirectory
 from docopt import docopt
@@ -67,6 +66,7 @@ class ClipboardManager():
 
         # Init notifications
         if self.cfg['notify']:
+            import pynotify
             pynotify.init(name)
 
     def daemon(self):
