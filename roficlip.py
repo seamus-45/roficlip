@@ -25,16 +25,17 @@ Commands:
 
 """
 
+import errno
 import os
 import stat
-import errno
 import struct
+from subprocess import PIPE, Popen
+
 import gobject
 import gtk
 import yaml
-from subprocess import PIPE, Popen
-from xdg import BaseDirectory
 from docopt import docopt
+from xdg import BaseDirectory
 
 
 class ClipboardManager():
@@ -66,8 +67,12 @@ class ClipboardManager():
 
         # Init notifications
         if self.cfg['notify']:
-            import pynotify
-            pynotify.init(name)
+            try:
+                import pynotify
+                self.pynotify = pynotify
+                self.pynotify.init(name)
+            except ImportError:
+                self.cfg['notify'] = False
 
     def daemon(self):
         """
@@ -177,7 +182,7 @@ class ClipboardManager():
         """
         Show desktop notification.
         """
-        n = pynotify.Notification("Roficlip", text)
+        n = self.pynotify.Notification("Roficlip", text)
         n.set_timeout(self.cfg['notify_timeout'] * 1000)
         n.show()
 
