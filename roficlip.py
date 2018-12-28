@@ -6,6 +6,7 @@ Usage:
     roficlip.py --show [--persistent | --actions] [-q | --quiet] [<index>]
     roficlip.py --add [-q | --quiet ]
     roficlip.py --remove [-q | --quiet]
+    roficlip.py --edit
     roficlip.py (-h | --help)
     roficlip.py (-v | --version)
 
@@ -19,6 +20,7 @@ Commands:
     --actions       Select to show actions defined in config.
     --add           Add current clipboard to persistent storage.
     --remove        Remove current clipboard from persistent storage.
+    --edit          Edit persistent storage with text editor.
     -q, --quiet     Do not notify, even if notification enabled in config.
     -h, --help      Show this screen.
     -v, --version   Show version.
@@ -30,6 +32,7 @@ import os
 import stat
 import struct
 from subprocess import PIPE, Popen
+from tempfile import NamedTemporaryFile
 
 import gobject
 import gtk
@@ -164,6 +167,37 @@ class ClipboardManager():
             if self.cfg['notify']:
                 self.notify_send('Removed from persistent.')
 
+    def persistent_edit(self):
+        """
+        Edit persistent storage with text editor.
+        New line char will be used as separator.
+        """
+        editor = os.getenv('EDITOR')
+        if self.persist and editor:
+            try:
+                tmp = NamedTemporaryFile(mode='w+')
+                for clip in self.persist:
+                    clip = '{}\n'.format(clip.replace('\n', self.cfg['newline_char']).encode('utf-8'))
+                    tmp.write(clip)
+                tmp.flush()
+            except IOError as e:
+                print "I/O error({0}): {1}".format(e.errno, e.strerror)
+            else:
+                proc = Popen([editor, tmp.name])
+                ret = proc.wait()
+                if ret == 0:
+                    tmp.seek(0, 0)
+                    clips = tmp.read().splitlines()
+                    if clips:
+                        self.persist = []
+                        for clip in clips:
+                            clip = clip.replace('\n', '')
+                            clip = clip.replace(self.cfg['newline_char'], '\n')
+                            self.persist.append(clip)
+                        self.write(self.persist_db, self.persist)
+            finally:
+                tmp.close()
+
     def do_action(self, action):
         """
         Run selected action on clipboard contents.
@@ -256,4 +290,6 @@ if __name__ == "__main__":
         cm.persistent_add()
     elif args['--remove']:
         cm.persistent_remove()
+    elif args['--edit']:
+        cm.persistent_edit()
     exit(0)
