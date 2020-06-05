@@ -149,7 +149,7 @@ class ClipboardManager():
                 # Save index of last \#
                 idx = clip.rfind('#')
                 # Format string
-                clip = '{} ➜ {}'.format(clip[idx:], clip[:idx])
+                clip = '{} ➜ {}'.format(clip[idx+1:], clip[:idx])
             preview = clip[0:self.cfg['preview_width']]
             print('{}: {}'.format(index, preview))
 
