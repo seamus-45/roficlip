@@ -143,6 +143,13 @@ class ClipboardManager():
         """
         for index, clip in enumerate(items):
             clip = clip.replace('\n', self.cfg['newline_char']).encode('utf-8')
+
+            # Move text after last \# to beginning of string
+            if args['--persistent'] and self.cfg['show_comments_first'] and '#' in clip and clip[0] != '#':
+                # Save index of last \#
+                idx = clip.rfind('#')
+                # Format string
+                clip = '{} ➜ {}'.format(clip[idx:], clip[:idx])
             preview = clip[0:self.cfg['preview_width']]
             print('{}: {}'.format(index, preview))
 
@@ -181,7 +188,7 @@ class ClipboardManager():
                     tmp.write(clip)
                 tmp.flush()
             except IOError as e:
-                print "I/O error({0}): {1}".format(e.errno, e.strerror)
+                print("I/O error({0}): {1}".format(e.errno, e.strerror))
             else:
                 proc = Popen([editor, tmp.name])
                 ret = proc.wait()
@@ -255,6 +262,7 @@ class ClipboardManager():
                 'newline_char': '¬',
                 'notify': True,
                 'notify_timeout': 1,
+                'show_comments_first': False,
             },
             'actions': {}
         }
