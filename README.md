@@ -26,7 +26,7 @@ Run daemon:
 roficlip.py --daemon &
 ```
 
-Bind hotkey (combined mode): 
+Bind hotkey (combined mode):
 ```bash
 rofi -modi "clipboard:roficlip.py --show,persistent:roficlip.py --show --persistent,actions:roficlip.py --show --actions" -show clipboard
 ```
@@ -39,11 +39,12 @@ rofi -modi "clipboard:roficlip.py --show" -show clipboard
 Yaml config placed in `$XDG_CONFIG_HOME/roficlip/settings` Example:
 ```yaml
 settings:
-  ring_size: 20        # maximum clips count.
-  preview_width: 100   # maximum preview width for rofi.
-  newline_char: '¬'    # any character for using in preview as new line marker.
-  notify: True         # allow using desktop notifications.
-  notify_timeout: 1    # notification timeout.
+  ring_size: 20                 # maximum clips count.
+  preview_width: 100            # maximum preview width for rofi.
+  newline_char: '¬'             # any character for using in preview as new line marker.
+  notify: True                  # allow using desktop notifications.
+  notify_timeout: 1             # notification timeout.
+  show_comments_first: False    # if using persistent storage for command shortcuts followed by '#' comment.
 
 actions:
   'open url via mpv player': 'mpv --geometry=720x405-20-20 %s' # %s will be replaced with current clipboard content.
