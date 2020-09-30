@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
 """Rofi clipboard manager
 Usage:
@@ -34,8 +34,10 @@ import struct
 from subprocess import PIPE, Popen
 from tempfile import NamedTemporaryFile
 
-import gobject
-import gtk
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk, Gdk, GLib
+
 import yaml
 from docopt import docopt
 from xdg import BaseDirectory
@@ -61,7 +63,7 @@ class ClipboardManager():
         self.fifo = os.open(self.fifo_path, os.O_RDONLY | os.O_NONBLOCK)
 
         # Init clipboard and read databases
-        self.cb = gtk.Clipboard()
+        self.cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         self.ring = self.read(self.ring_db)
         self.persist = self.read(self.persist_db)
 
@@ -71,19 +73,20 @@ class ClipboardManager():
         # Init notifications
         if self.cfg['notify']:
             try:
-                import pynotify
-                self.pynotify = pynotify
-                self.pynotify.init(name)
+                import notify2
+                self.notify = notify2
+                self.notify.init(name)
             except ImportError:
+                print("Error importing pynotify2 for notifications.")
                 self.cfg['notify'] = False
 
     def daemon(self):
         """
         Clipboard Manager daemon.
         """
-        gobject.timeout_add(300, self.cb_watcher)
-        gobject.timeout_add(300, self.fifo_watcher)
-        gtk.main()
+        GLib.timeout_add(300, self.cb_watcher)
+        GLib.timeout_add(300, self.fifo_watcher)
+        Gtk.main()
 
     def cb_watcher(self):
         """
@@ -111,9 +114,8 @@ class ClipboardManager():
             else:
                 raise
         if fifo_in:
-            self.cb.set_text(fifo_in)
-            if self.cfg['notify']:
-                self.notify_send('Copied to the clipboard.')
+            self.cb.set_text(fifo_in.decode('utf-8'), -1)
+            self.notify_send('Copied to the clipboard.')
         return True
 
     def sync_items(self, clip, items):
@@ -134,18 +136,19 @@ class ClipboardManager():
         """
         if clip:
             index = int(clip[0:clip.index(':')])
-            with open(self.fifo_path, "w+") as file:
-                file.write(items[index].encode('utf-8'))
+            with open(self.fifo_path, "w") as file:
+                file.write(items[index])
+                file.close()
 
     def show_items(self, items):
         """
         Format and show contents of specified dict (for rofi).
         """
         for index, clip in enumerate(items):
-            clip = clip.replace('\n', self.cfg['newline_char']).encode('utf-8')
+            clip = clip.replace('\n', self.cfg['newline_char'])
 
             # Move text after last \# to beginning of string
-            if args['--persistent'] and self.cfg['show_comments_first'] and '#' in clip and clip[0] != '#':
+            if args['--persistent'] and self.cfg['show_comments_first'] and '#' in clip:
                 # Save index of last \#
                 idx = clip.rfind('#')
                 # Format string
@@ -160,8 +163,7 @@ class ClipboardManager():
         clip = self.cb.wait_for_text()
         if self.sync_items(clip, self.persist):
             self.write(self.persist_db, self.persist)
-            if self.cfg['notify']:
-                self.notify_send('Added to persistent.')
+            self.notify_send('Added to persistent.')
 
     def persistent_remove(self):
         """
@@ -171,8 +173,7 @@ class ClipboardManager():
         if clip and clip in self.persist:
             self.persist.remove(clip)
             self.write(self.persist_db, self.persist)
-            if self.cfg['notify']:
-                self.notify_send('Removed from persistent.')
+            self.notify_send('Removed from persistent.')
 
     def persistent_edit(self):
         """
@@ -184,7 +185,7 @@ class ClipboardManager():
             try:
                 tmp = NamedTemporaryFile(mode='w+')
                 for clip in self.persist:
-                    clip = '{}\n'.format(clip.replace('\n', self.cfg['newline_char']).encode('utf-8'))
+                    clip = '{}\n'.format(clip.replace('\n', self.cfg['newline_char']))
                     tmp.write(clip)
                 tmp.flush()
             except IOError as e:
@@ -216,16 +217,16 @@ class ClipboardManager():
             while '%s' in params:
                 params[params.index('%s')] = clip
             Popen(params, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            if self.cfg['notify']:
-                self.notify_send(key)
+            self.notify_send("Action: {}".format(key))
 
     def notify_send(self, text):
         """
         Show desktop notification.
         """
-        n = self.pynotify.Notification("Roficlip", text)
-        n.set_timeout(self.cfg['notify_timeout'] * 1000)
-        n.show()
+        if self.cfg['notify']:
+            n = self.notify.Notification("Roficlip", text)
+            n.timeout = self.cfg['notify_timeout'] * 1000
+            n.show()
 
     def read(self, fd):
         """
@@ -248,7 +249,8 @@ class ClipboardManager():
         with open(fd, 'wb') as file:
             for item in items:
                 item = item.encode('utf-8')
-                file.write("{0}{1}".format(struct.pack('>i', len(item)), item))
+                file.write(struct.pack('>i', len(item)))
+                file.write(item)
 
     def load_config(self):
         """
