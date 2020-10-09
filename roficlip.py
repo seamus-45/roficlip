@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Rofi clipboard manager
 Usage:
@@ -77,7 +77,6 @@ class ClipboardManager():
                 self.notify = notify2
                 self.notify.init(name)
             except ImportError:
-                print("Error importing pynotify2 for notifications.")
                 self.cfg['notify'] = False
 
     def daemon(self):
