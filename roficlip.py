@@ -3,7 +3,7 @@
 """Rofi clipboard manager
 Usage:
     roficlip.py --daemon [-q | --quiet]
-    roficlip.py --show [--persistent | --actions] [-q | --quiet] [<index>]
+    roficlip.py --show [--persistent | --actions] [-q | --quiet] [<item>]
     roficlip.py --add [-q | --quiet ]
     roficlip.py --remove [-q | --quiet]
     roficlip.py --edit
@@ -11,7 +11,7 @@ Usage:
     roficlip.py (-v | --version)
 
 Arguments:
-    <index>         Index of item. Used by Rofi.
+    <item>          Selected item to be used with rofi
 
 Commands:
     --daemon        Run clipboard manager daemon.
@@ -26,21 +26,29 @@ Commands:
     -v, --version   Show version.
 
 """
-
 import errno
 import os
+import sys
 import stat
 import struct
-from subprocess import PIPE, Popen
+from subprocess import Popen, DEVNULL
 from tempfile import NamedTemporaryFile
 
-import gi
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, GLib
+try:
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk, Gdk, GLib
+except ImportError:
+    raise
 
 import yaml
 from docopt import docopt
 from xdg import BaseDirectory
+
+try:
+    import notify2
+except ImportError:
+    pass
 
 
 class ClipboardManager():
@@ -71,13 +79,11 @@ class ClipboardManager():
         self.load_config()
 
         # Init notifications
-        if self.cfg['notify']:
-            try:
-                import notify2
-                self.notify = notify2
-                self.notify.init(name)
-            except ImportError:
-                self.cfg['notify'] = False
+        if self.cfg['notify'] and 'notify2' in sys.modules:
+            self.notify = notify2
+            self.notify.init(name)
+        else:
+            self.cfg['notify'] = False
 
     def daemon(self):
         """
@@ -119,7 +125,7 @@ class ClipboardManager():
 
     def sync_items(self, clip, items):
         """
-        Sync clipboard contents with specified dict when needed.
+        Sync clipboard contents with specified items dict when needed.
         Return "True" if dict modified, otherwise "False".
         """
         if clip and (not items or clip != items[0]):
@@ -129,21 +135,20 @@ class ClipboardManager():
             return True
         return False
 
-    def copy_item(self, clip, items):
+    def copy_item(self, clip):
         """
         Writes to fifo item that should be copied to clipboard.
         """
         if clip:
-            index = int(clip[0:clip.index(':')])
             with open(self.fifo_path, "w") as file:
-                file.write(items[index])
+                file.write(clip)
                 file.close()
 
     def show_items(self, items):
         """
-        Format and show contents of specified dict (for rofi).
+        Format and show contents of specified items dict (for rofi).
         """
-        for index, clip in enumerate(items):
+        for clip in items:
             clip = clip.replace('\n', self.cfg['newline_char'])
 
             # Move text after last \# to beginning of string
@@ -153,7 +158,7 @@ class ClipboardManager():
                 # Format string
                 clip = '{} ➜ {}'.format(clip[idx+1:], clip[:idx])
             preview = clip[0:self.cfg['preview_width']]
-            print('{}: {}'.format(index, preview))
+            print(preview)
 
     def persistent_add(self):
         """
@@ -190,7 +195,7 @@ class ClipboardManager():
             except IOError as e:
                 print("I/O error({0}): {1}".format(e.errno, e.strerror))
             else:
-                proc = Popen([editor, tmp.name])
+                proc = Popen([editor, tmp.name], stdout=DEVNULL, stderr=DEVNULL)
                 ret = proc.wait()
                 if ret == 0:
                     tmp.seek(0, 0)
@@ -211,12 +216,11 @@ class ClipboardManager():
         """
         if action:
             clip = self.cb.wait_for_text()
-            key = action[action.index(':')+2:]
-            params = self.actions[key].split(' ')
+            params = self.actions[action].split(' ')
             while '%s' in params:
                 params[params.index('%s')] = clip
-            Popen(params, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            self.notify_send("Action: {}".format(key))
+            Popen(params, stdout=DEVNULL, stderr=DEVNULL)
+            self.notify_send("Action: {}".format(action))
 
     def notify_send(self, text):
         """
@@ -285,14 +289,13 @@ if __name__ == "__main__":
     if args['--daemon']:
         cm.daemon()
     elif (args['--show'] and not args['--actions']):
-        if args['<index>']:
-            cm.copy_item(args['<index>'],
-                         cm.persist if args['--persistent'] else cm.ring)
+        if args['<item>']:
+            cm.copy_item(args['<item>'])
         else:
             cm.show_items(cm.persist if args['--persistent'] else cm.ring)
     elif (args['--show'] and args['--actions']):
-        if args['<index>']:
-            cm.do_action(args['<index>'])
+        if args['<item>']:
+            cm.do_action(args['<item>'])
         else:
             cm.show_items(cm.actions)
     elif args['--add']:
