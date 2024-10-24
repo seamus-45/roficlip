@@ -203,7 +203,7 @@ class ClipboardManager():
             except IOError as e:
                 print("I/O error({0}): {1}".format(e.errno, e.strerror))
             else:
-                proc = Popen([editor, tmp.name], stdout=DEVNULL, stderr=DEVNULL)
+                proc = Popen([editor, tmp.name])
                 ret = proc.wait()
                 if ret == 0:
                     tmp.seek(0, 0)
