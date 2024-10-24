@@ -3,15 +3,16 @@
 """Rofi clipboard manager
 Usage:
     roficlip.py --daemon [-q | --quiet]
-    roficlip.py --show [--persistent | --actions] [-q | --quiet] [<index>]
-    roficlip.py --add [-q | --quiet ]
+    roficlip.py --show [--persistent | --actions] [<item>] [-q | --quiet]
+    roficlip.py --add [-q | --quiet]
     roficlip.py --remove [-q | --quiet]
     roficlip.py --edit
     roficlip.py (-h | --help)
     roficlip.py (-v | --version)
 
 Arguments:
-    <index>         Index of item. Used by Rofi.
+    <item>          Selected item passed by Rofi on second script run.
+                    Used with actions as index for dict.
 
 Commands:
     --daemon        Run clipboard manager daemon.
@@ -29,18 +30,32 @@ Commands:
 
 import errno
 import os
+import sys
 import stat
 import struct
-from subprocess import PIPE, Popen
+from subprocess import Popen, DEVNULL
 from tempfile import NamedTemporaryFile
 
-import gi
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, GLib
+try:
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk, Gdk, GLib
+except ImportError:
+    raise
 
 import yaml
 from docopt import docopt
 from xdg import BaseDirectory
+
+try:
+    import notify2
+except ImportError:
+    pass
+
+
+# Used for injecting hidden index for menu rows. Simulate dmenu behavior.
+# See rofi-script.5 for details
+ROFI_INFO = b'\0info\x1f'
 
 
 class ClipboardManager():
@@ -71,13 +86,11 @@ class ClipboardManager():
         self.load_config()
 
         # Init notifications
-        if self.cfg['notify']:
-            try:
-                import notify2
-                self.notify = notify2
-                self.notify.init(name)
-            except ImportError:
-                self.cfg['notify'] = False
+        if self.cfg['notify'] and 'notify2' in sys.modules:
+            self.notify = notify2
+            self.notify.init(name)
+        else:
+            self.cfg['notify'] = False
 
     def daemon(self):
         """
@@ -129,31 +142,32 @@ class ClipboardManager():
             return True
         return False
 
-    def copy_item(self, clip, items):
+    def copy_item(self, index, items):
         """
         Writes to fifo item that should be copied to clipboard.
         """
-        if clip:
-            index = int(clip[0:clip.index(':')])
-            with open(self.fifo_path, "w") as file:
-                file.write(items[index])
-                file.close()
+        with open(self.fifo_path, "w") as file:
+            file.write(items[index])
+            file.close()
 
     def show_items(self, items):
         """
         Format and show contents of specified dict (for rofi).
         """
         for index, clip in enumerate(items):
-            clip = clip.replace('\n', self.cfg['newline_char'])
-
-            # Move text after last \# to beginning of string
-            if args['--persistent'] and self.cfg['show_comments_first'] and '#' in clip:
-                # Save index of last \#
-                idx = clip.rfind('#')
-                # Format string
-                clip = '{} ➜ {}'.format(clip[idx+1:], clip[:idx])
-            preview = clip[0:self.cfg['preview_width']]
-            print('{}: {}'.format(index, preview))
+            if args['--actions']:
+                print(clip)
+            else:
+                clip = clip.replace('\n', self.cfg['newline_char'])
+                # Move text after last '#'to beginning of string
+                if args['--persistent'] and self.cfg['show_comments_first'] and '#' in clip:
+                    # Save index of last '#'
+                    idx = clip.rfind('#')
+                    # Format string
+                    clip = '{}{} ➜ {}'.format(self.cfg['comment_char'], clip[idx+1:], clip[:idx])
+                # Truncate text to preview width setting
+                preview = clip[0:self.cfg['preview_width']]
+                print('{}{}{}'.format(preview, ROFI_INFO.decode('utf-8'), index))
 
     def persistent_add(self):
         """
@@ -179,7 +193,7 @@ class ClipboardManager():
         Edit persistent storage with text editor.
         New line char will be used as separator.
         """
-        editor = os.getenv('EDITOR')
+        editor = os.getenv('EDITOR', default='vi')
         if self.persist and editor:
             try:
                 tmp = NamedTemporaryFile(mode='w+')
@@ -205,18 +219,18 @@ class ClipboardManager():
             finally:
                 tmp.close()
 
-    def do_action(self, action):
+    def do_action(self, item):
         """
         Run selected action on clipboard contents.
         """
-        if action:
-            clip = self.cb.wait_for_text()
-            key = action[action.index(':')+2:]
-            params = self.actions[key].split(' ')
-            while '%s' in params:
-                params[params.index('%s')] = clip
-            Popen(params, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            self.notify_send("Action: {}".format(key))
+        clip = self.cb.wait_for_text()
+        params = self.actions[item].split(' ')
+        while '%s' in params:
+            params[params.index('%s')] = clip
+        proc = Popen(params, stdout=DEVNULL, stderr=DEVNULL)
+        ret = proc.wait()
+        if ret == 0:
+            self.notify_send(item)
 
     def notify_send(self, text):
         """
@@ -261,6 +275,7 @@ class ClipboardManager():
                 'ring_size': 20,
                 'preview_width': 100,
                 'newline_char': '¬',
+                'comment_char': '©',
                 'notify': True,
                 'notify_timeout': 1,
                 'show_comments_first': False,
@@ -279,26 +294,33 @@ class ClipboardManager():
 
 if __name__ == "__main__":
     cm = ClipboardManager()
-    args = docopt(__doc__, version='0.4')
+    args = docopt(__doc__, version='0.5')
     if args['--quiet']:
         cm.cfg['notify'] = False
     if args['--daemon']:
         cm.daemon()
-    elif (args['--show'] and not args['--actions']):
-        if args['<index>']:
-            cm.copy_item(args['<index>'],
-                         cm.persist if args['--persistent'] else cm.ring)
-        else:
-            cm.show_items(cm.persist if args['--persistent'] else cm.ring)
-    elif (args['--show'] and args['--actions']):
-        if args['<index>']:
-            cm.do_action(args['<index>'])
-        else:
-            cm.show_items(cm.actions)
     elif args['--add']:
         cm.persistent_add()
     elif args['--remove']:
         cm.persistent_remove()
     elif args['--edit']:
         cm.persistent_edit()
+    elif args['--show']:
+        # Parse variables passed from rofi. See rofi-script.5 for details.
+        # We get index from selected row here.
+        if os.getenv('ROFI_INFO') is not None:
+            index = int(os.getenv('ROFI_INFO'))
+        elif args['<item>'] is not None:
+            index = args['<item>']
+        else:
+            index = None
+        # Show contents on first run
+        if index is None:
+            cm.show_items(cm.actions if args['--actions'] else cm.persist if args['--persistent'] else cm.ring)
+        # Do actions on second run
+        else:
+            if args['--actions']:
+                cm.do_action(index)
+            else:
+                cm.copy_item(index, cm.persist if args['--persistent'] else cm.ring)
     exit(0)
