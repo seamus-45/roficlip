@@ -7,6 +7,9 @@ Clipboard history manager designed for using with [Rofi](https://davedavenport.g
 * Define and use actions with clipboard contents.
 * Desktop notifications via D-Bus.
 
+# Shots
+![roficlip in rofi screenshot](shots/roficlip.apng)
+
 # Requirements #
 * [pygobject](https://pypi.org/project/PyGObject/)
 * [pyyaml](https://pypi.org/project/PyYAML/)
