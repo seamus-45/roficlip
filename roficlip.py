@@ -4,6 +4,7 @@
 Usage:
     roficlip.py --daemon [-q | --quiet]
     roficlip.py --show [--persistent | --actions] [<item>] [-q | --quiet]
+    roficlip.py --clear [-q | --quiet]
     roficlip.py --add [-q | --quiet]
     roficlip.py --remove [-q | --quiet]
     roficlip.py --edit
@@ -19,6 +20,7 @@ Commands:
     --show          Show clipboard history.
     --persistent    Select to show persistent history.
     --actions       Select to show actions defined in config.
+    --clear         Clear clipboard history.
     --add           Add current clipboard to persistent storage.
     --remove        Remove current clipboard from persistent storage.
     --edit          Edit persistent storage with text editor.
@@ -126,7 +128,7 @@ class ClipboardManager():
                 raise
         if fifo_in:
             self.cb.set_text(fifo_in.decode('utf-8'), -1)
-            self.notify_send('Copied to the clipboard.')
+            self.notify_send('Copied to the clipboard')
         return True
 
     def sync_items(self, clip, items):
@@ -140,6 +142,14 @@ class ClipboardManager():
             items.insert(0, clip)
             return True
         return False
+
+    def clear_ring(self):
+        """
+        Cleanup ring dict
+        """
+        self.ring = []
+        self.write(self.ring_db, self.ring)
+        self.notify_send('Clipboard is cleaned')
 
     def copy_item(self, index, items):
         """
@@ -175,7 +185,7 @@ class ClipboardManager():
         clip = self.cb.wait_for_text()
         if self.sync_items(clip, self.persist):
             self.write(self.persist_db, self.persist)
-            self.notify_send('Added to persistent.')
+            self.notify_send('Added to persistent')
 
     def persistent_remove(self):
         """
@@ -185,7 +195,7 @@ class ClipboardManager():
         if clip and clip in self.persist:
             self.persist.remove(clip)
             self.write(self.persist_db, self.persist)
-            self.notify_send('Removed from persistent.')
+            self.notify_send('Removed from persistent')
 
     def persistent_edit(self):
         """
@@ -298,6 +308,8 @@ if __name__ == "__main__":
         cm.cfg['notify'] = False
     if args['--daemon']:
         cm.daemon()
+    elif args['--clear']:
+        cm.clear_ring()
     elif args['--add']:
         cm.persistent_add()
     elif args['--remove']:
