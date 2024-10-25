@@ -38,6 +38,7 @@ from subprocess import Popen, DEVNULL
 from tempfile import NamedTemporaryFile
 
 try:
+    # https://docs.gtk.org/gtk3/method.Clipboard.clear.html
     import gi
     gi.require_version("Gtk", "3.0")
     from gi.repository import Gtk, Gdk, GLib
@@ -56,7 +57,10 @@ except ImportError:
 
 # Used for injecting hidden index for menu rows. Simulate dmenu behavior.
 # See rofi-script.5 for details
-ROFI_INFO = b'\0info\x1f'
+ROFI_INFO = b'\0info\x1f'.decode('utf-8')
+
+# Used with fifo as instruction for cleaing clipboard history
+CLEAR_CODE = b'\0clear'.decode('utf-8')
 
 
 class ClipboardManager():
@@ -117,6 +121,7 @@ class ClipboardManager():
         """
         Callback function.
         Copy contents from fifo to clipboard.
+        Can clear clipboard history by instruction.
         Must return "True" for continuous operation.
         """
         try:
@@ -127,8 +132,14 @@ class ClipboardManager():
             else:
                 raise
         if fifo_in:
-            self.cb.set_text(fifo_in.decode('utf-8'), -1)
-            self.notify_send('Copied to the clipboard')
+            if fifo_in.decode('utf-8') == CLEAR_CODE:
+                self.cb.set_text('', -1)
+                self.ring = ['']
+                self.write(self.ring_db, self.ring)
+                self.notify_send('Clipboard is cleaned')
+            else:
+                self.cb.set_text(fifo_in.decode('utf-8'), -1)
+                self.notify_send('Copied to the clipboard')
         return True
 
     def sync_items(self, clip, items):
@@ -145,11 +156,11 @@ class ClipboardManager():
 
     def clear_ring(self):
         """
-        Cleanup ring dict
+        Write to fifo instruction for cleaning clipboard history
         """
-        self.ring = []
-        self.write(self.ring_db, self.ring)
-        self.notify_send('Clipboard is cleaned')
+        with open(self.fifo_path, "w") as file:
+            file.write(CLEAR_CODE)
+            file.close()
 
     def copy_item(self, index, items):
         """
@@ -176,7 +187,7 @@ class ClipboardManager():
                     clip = '{}{} ➜ {}'.format(self.cfg['comment_char'], clip[idx+1:], clip[:idx])
                 # Truncate text to preview width setting
                 preview = clip[0:self.cfg['preview_width']]
-                print('{}{}{}'.format(preview, ROFI_INFO.decode('utf-8'), index))
+                print('{}{}{}'.format(preview, ROFI_INFO, index))
 
     def persistent_add(self):
         """
