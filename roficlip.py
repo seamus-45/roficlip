@@ -36,6 +36,7 @@ import stat
 import struct
 from subprocess import Popen, DEVNULL
 from tempfile import NamedTemporaryFile
+from html import escape
 
 try:
     # https://docs.gtk.org/gtk3/method.Clipboard.clear.html
@@ -58,6 +59,10 @@ except ImportError:
 # Used for injecting hidden index for menu rows. Simulate dmenu behavior.
 # See rofi-script.5 for details
 ROFI_INFO = b'\0info\x1f'.decode('utf-8')
+
+# Used for pango markup
+ROFI_MARKUP = b'\0markup-rows\x1ftrue'.decode('utf-8')
+ROFI_COMMENT = '<span color="#aaa">#{}</span>'
 
 # Used with fifo as instruction for cleaing clipboard history
 CLEAR_CODE = b'\0clear'.decode('utf-8')
@@ -174,20 +179,26 @@ class ClipboardManager():
         """
         Format and show contents of specified items dict (for rofi).
         """
+        print(ROFI_MARKUP) if self.cfg['colored_comments'] else None
         for index, clip in enumerate(items):
             if args['--actions']:
                 print(clip)
             else:
+                # Replace newline characters for joining string
                 clip = clip.replace('\n', self.cfg['newline_char'])
-                # Move text after last '#'to beginning of string
-                if args['--persistent'] and self.cfg['show_comments_first'] and '#' in clip:
+                if (self.cfg['colored_comments'] or self.cfg['show_comments_first']) and '#' in clip:
                     # Save index of last '#'
                     idx = clip.rfind('#')
-                    # Format string
-                    clip = '{}{} ➜ {}'.format(self.cfg['comment_char'], clip[idx+1:], clip[:idx])
-                # Truncate text to preview width setting
-                preview = clip[0:self.cfg['preview_width']]
-                print('{}{}{}'.format(preview, ROFI_INFO, index))
+                    body = escape(clip[:idx]) if self.cfg['colored_comments'] else clip[:idx]
+                    comment = ROFI_COMMENT.format(
+                        escape(clip[idx+1:])
+                    ) if self.cfg['colored_comments'] else '#' + clip[idx+1:]
+                    if args['--persistent'] and self.cfg['show_comments_first']:
+                        # Move text after last '#' to beginning of string
+                        clip = '{} {}'.format(comment, body)
+                    else:
+                        clip = '{} {}'.format(body, comment)
+                print('{}{}{}'.format(clip, ROFI_INFO, index))
 
     def persistent_add(self):
         """
@@ -293,12 +304,11 @@ class ClipboardManager():
         settings = {
             'settings': {
                 'ring_size': 20,
-                'preview_width': 100,
                 'newline_char': '¬',
-                'comment_char': '©',
                 'notify': True,
                 'notify_timeout': 1,
                 'show_comments_first': False,
+                'colored_comments': False
             },
             'actions': {}
         }

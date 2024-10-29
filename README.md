@@ -47,12 +47,11 @@ Yaml config placed in `$XDG_CONFIG_HOME/roficlip/settings` Example:
 ```yaml
 settings:
   ring_size: 20                 # maximum clips count.
-  preview_width: 100            # maximum preview width for rofi.
   newline_char: '¬'             # any character for using in preview as new line marker.
-  comment_char: '©'
   notify: True                  # allow using desktop notifications.
   notify_timeout: 1             # notification timeout in seconds.
-  show_comments_first: False    # if using persistent notes for command shortcuts followed by '#' comment.
+  show_comments_first: False    # all text after last '#' moved to beginning of line (in persitent mode)
+  colored_comments: False       # all text after last '#' is grayed
 
 actions:
   'open url via mpv player': 'mpv --geometry=720x405-20-20 %s' # %s will be replaced with current clipboard content.
